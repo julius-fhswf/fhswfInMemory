@@ -9,8 +9,9 @@ import plotext as plt
 import redis_connector as connector
 
 ### definitions
-mean_velocity_f = 0.32  # mean velocity of the rolled material exiting the process in m/s
-mean_velocity_r = 0.3  # max velocity of the roll in m/s
+mean_velocity_f = 1  # mean velocity of the rolled material exiting the process in m/s
+mean_velocity_r = 1  # max velocity of the roll in m/s
+max_slip = 0.1 #max slip (delta)
 stream_name = "mubea_trb"
 
 
@@ -68,8 +69,8 @@ class SimulationThread(Thread):
         self.value = None
 
     def simulateMeasurement(self):
-        num_r = np.random.default_rng().normal(mean_velocity_r, 0.01, size=None)
-        num_f = np.random.uniform(low=max(mean_velocity_f, num_r), high=min(mean_velocity_f, num_r), size=None)
+        num_r = np.random.default_rng().normal(mean_velocity_r, 0.1, size=None)
+        num_f = num_r # make this meaningful
         m = Measurement(num_f, num_r)
         return m
 
@@ -88,13 +89,13 @@ def simulateRuns(runs: int, delay_ms: int, s: MeasurementStore):
         s.store(t.value)
 
 
-def monitorRuns(runs: int, s: MeasurementStore, refresh_ms: int):
+def monitorRuns(runs: int, d: MeasurementStore, refresh_ms: int):
     labels = []
     velocities_f = []
     velocities_r = []
-    slip = []
+    delta = []
 
-    values = s.getLast(runs)
+    values = d.getLast(runs)
     for v in values:
         id, data = v
     #
@@ -102,8 +103,8 @@ def monitorRuns(runs: int, s: MeasurementStore, refresh_ms: int):
         velocities_f.append(float(data.get('velocity_f')))
         velocities_r.append(float(data.get('velocity_r')))
 
-        s = 1 if float(data.get('velocity_f')) < float(data.get('velocity_r')) else 0
-        slip.append(s)
+        d = float(data.get('velocity_f')) - float(data.get('velocity_r'))
+        delta.append(d)
 
     title = 'Last Runs'
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -112,10 +113,9 @@ def monitorRuns(runs: int, s: MeasurementStore, refresh_ms: int):
     #
     #todo make dates used in visualizations
     dates = plt.datetimes_to_string(labels)
-    plt.plot(velocities_f, label="f", yside="left")
-    plt.plot(velocities_r, label="r", yside="left")
-    plt.scatter(slip, label="slip", yside="right")
-
+    plt.plot(delta, label="delta", yside="right", fillx=True, color="gray")
+    plt.plot(velocities_f, label="f", yside="left", color="blue")
+    plt.plot(velocities_r, label="r", yside="left", color="green")
     #
     plt.interactive(True)
     plt.show()
@@ -128,12 +128,12 @@ def main():
     with client:
         client.ping()
         store = MeasurementStore(client, stream_name)
-        test = Timer(1, simulateRuns, args=(500, 200, store))
+        test = Timer(1, simulateRuns, args=(500, 50, store))
         test.start()
 
         try:
             while True:
-                monitorRuns(100, store, 1000)
+                monitorRuns(20, store, 200)
 
         except KeyboardInterrupt:
             pass
