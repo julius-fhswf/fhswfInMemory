@@ -70,7 +70,7 @@ class SimulationThread(Thread):
 
     def simulateMeasurement(self):
         num_r = np.random.default_rng().normal(mean_velocity_r, 0.1, size=None)
-        num_f = num_r # make this meaningful
+        num_f = np.random.uniform(low=max(mean_velocity_f, num_r), high=min(mean_velocity_f, num_r), size=None) # this could be made more meaningful
         m = Measurement(num_f, num_r)
         return m
 
